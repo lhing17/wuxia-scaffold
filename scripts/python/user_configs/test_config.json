@@ -1,0 +1,86 @@
+{
+  "native_attributes": [
+    {
+      "id": 1,
+      "english_name": "ATTR_HEALTH",
+      "chinese_name": "气血",
+      "original_description": "War3原生属性：当前生命值"
+    },
+    {
+      "id": 2,
+      "english_name": "ATTR_MANA",
+      "chinese_name": "内力",
+      "original_description": "War3原生属性：当前魔法值"
+    },
+    {
+      "id": 3,
+      "english_name": "ATTR_STR",
+      "chinese_name": "根骨",
+      "original_description": "War3原生属性：力量"
+    },
+    {
+      "id": 4,
+      "english_name": "ATTR_INT",
+      "chinese_name": "悟性",
+      "original_description": "War3原生属性：智力"
+    },
+    {
+      "id": 5,
+      "english_name": "ATTR_AGI",
+      "chinese_name": "身法",
+      "original_description": "War3原生属性：敏捷"
+    },
+    {
+      "id": 6,
+      "english_name": "ATTR_MAX_HEALTH",
+      "chinese_name": "最大气血",
+      "original_description": "War3原生属性：最大生命值"
+    },
+    {
+      "id": 7,
+      "english_name": "ATTR_MAX_MANA",
+      "chinese_name": "最大内力",
+      "original_description": "War3原生属性：最大魔法值"
+    }
+  ],
+  "custom_attributes": [
+    {
+      "id": 8,
+      "english_name": "ATTR_ATTACK",
+      "chinese_name": "武力",
+      "storage_type": "real",
+      "description": "攻击力"
+    },
+    {
+      "id": 9,
+      "english_name": "ATTR_DEFENSE",
+      "chinese_name": "防御",
+      "storage_type": "real",
+      "description": "防御力"
+    }
+  ],
+  "attribute_limits": [
+    {
+      "attribute_name": "ATTR_ATTACK",
+      "max_value": 1000.0,
+      "description": "攻击力上限 1000"
+    }
+  ],
+  "default_values": {
+    "ATTR_HEALTH": 500.0,
+    "ATTR_MAX_HEALTH": 500.0,
+    "ATTR_MANA": 300.0,
+    "ATTR_MAX_MANA": 300.0,
+    "ATTR_STR": 10.0,
+    "ATTR_INT": 10.0,
+    "ATTR_AGI": 10.0,
+    "ATTR_ATTACK": 50.0,
+    "ATTR_DEFENSE": 30.0
+  },
+  "custom_start_id": 8,
+  "system_constants": {
+    "MODE_ADD": 0,
+    "MODE_SUB": 1,
+    "MODE_SET": 2
+  }
+}

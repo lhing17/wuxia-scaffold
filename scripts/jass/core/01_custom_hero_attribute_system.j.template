@@ -1,0 +1,503 @@
+// ============================================================================
+// Custom Hero Attribute System (Configurable Template)
+// ============================================================================
+// 可配置的英雄属性系统模板
+//
+// 使用说明：
+// 1. 在下面的"用户配置区域"中定义您的属性名称和列表
+// 2. 根据您的游戏需求修改属性上限和其他配置
+// 3. 系统会自动生成对应的属性操作函数
+// ============================================================================
+// 存储策略：
+// - 原生属性（生命、魔法、力量、敏捷、智力）：使用War3原生API
+// - 自定义属性：使用哈希表存储
+// ============================================================================
+
+library CustomHeroAttributeSystem initializer InitCustomHeroAttributeSystem
+
+    globals
+        // ==========================================
+        // 用户配置区域 - 请根据您的游戏需求修改
+        // ==========================================
+
+        // --------------------------------------------------
+        // 1. War3原生属性对应的自定义名称配置
+        // --------------------------------------------------
+        // 说明：这里定义War3原生属性在您的游戏中的名称
+        // 您可以修改常量的值（数字ID）和注释中的名称
+
+        // {{NATIVE_ATTRIBUTES_START}}
+        constant integer ATTR_HEALTH        = 1   // 气血 (War3原生属性：当前生命值)
+        constant integer ATTR_MANA          = 2   // 内力 (War3原生属性：当前魔法值)
+        constant integer ATTR_STR           = 3   // 根骨 (War3原生属性：力量)
+        constant integer ATTR_INT           = 4   // 悟性 (War3原生属性：智力)
+        constant integer ATTR_AGI           = 5   // 身法 (War3原生属性：敏捷)
+        constant integer ATTR_MAX_HEALTH    = 6   // 最大气血 (War3原生属性：最大生命值)
+        constant integer ATTR_MAX_MANA      = 7   // 最大内力 (War3原生属性：最大魔法值)
+        // {{NATIVE_ATTRIBUTES_END}}
+
+        // --------------------------------------------------
+        // 2. 自定义属性列表配置
+        // --------------------------------------------------
+        // 说明：这里定义您游戏中新增的自定义属性
+        // 从ATTR_CUSTOM_START开始编号，每个属性一个常量
+        // 您可以根据需要添加、删除或修改属性
+
+        // {{CUSTOM_ATTRIBUTES_START}}
+        constant integer ATTR_CUSTOM_START  = {{CUSTOM_START_ID}}   // 自定义属性起始ID
+
+        // 示例自定义属性（您可以根据需要修改）
+        constant integer ATTR_ATTACK        = 8   // 武力 (攻击力)
+        constant integer ATTR_SPELL_POWER   = 9   // 法强 (法术强度)
+        constant integer ATTR_CRIT_RATE     = 10  // 会心 (暴击率，存储为百分比，如10表示10%)
+        constant integer ATTR_CRIT_DAMAGE   = 11  // 要害 (暴击伤害，存储为百分比，如150表示150%)
+        constant integer ATTR_ARMOR         = 12  // 护体 (护甲)
+        constant integer ATTR_RESISTANCE    = 13  // 抗性 (魔法抗性)
+        constant integer ATTR_DODGE         = 14  // 闪避 (闪避率，存储为百分比)
+        constant integer ATTR_LIFESTEAL     = 15  // 吸血 (吸血率，存储为百分比)
+        constant integer ATTR_COOLDOWN      = 16  // 冷却 (冷却缩减，存储为百分比)
+        constant integer ATTR_MOVE_SPEED    = 17  // 移速 (移动速度加成，存储为百分比)
+
+        // 您可以根据需要继续添加更多属性
+        // constant integer ATTR_NEXT_ATTR    = 18  // 下一个属性
+        // {{CUSTOM_ATTRIBUTES_END}}
+
+        // --------------------------------------------------
+        // 3. 属性上限配置（可选）
+        // --------------------------------------------------
+        // 说明：这里定义各种属性的上限值，防止属性溢出
+
+        // {{ATTRIBUTE_LIMITS_START}}
+        constant real MAX_CRIT_RATE         = 100.0   // 暴击率上限 100%
+        constant real MAX_CRIT_DAMAGE       = 300.0   // 暴击伤害上限 300%
+        constant real MAX_DODGE_RATE        = 80.0    // 闪避率上限 80%
+        constant real MAX_LIFESTEAL         = 50.0    // 吸血率上限 50%
+        constant real MAX_COOLDOWN_REDUCTION = 40.0   // 冷却缩减上限 40%
+        // {{ATTRIBUTE_LIMITS_END}}
+
+        // --------------------------------------------------
+        // 4. 系统常量（一般不需要修改）
+        // --------------------------------------------------
+
+        constant integer MODE_ADD           = 0      // 增加模式
+        constant integer MODE_SUB           = 1      // 减少模式
+        constant integer MODE_SET           = 2      // 设置模式
+
+        // ==========================================
+        // 系统全局变量（不要修改）
+        // ==========================================
+
+        // 主哈希表 - 存储所有自定义属性
+        hashtable udg_custom_hero_attribute_ht
+
+        // 玩家英雄映射
+        unit array udg_player_hero                 // 玩家ID -> 英雄单位
+        integer array udg_player_hero_id           // 玩家ID -> 英雄类型ID
+
+        // 系统初始化标记
+        boolean array CustomHeroSystemInitialized
+
+    endglobals
+
+    // ==========================================
+    // 初始化函数
+    // ==========================================
+
+    function InitCustomHeroAttributeSystem takes nothing returns nothing
+        local integer i
+
+        // 创建主哈希表
+        set udg_custom_hero_attribute_ht = InitHashtable()
+
+        // 初始化玩家英雄映射数组
+        set i = 0
+        loop
+            exitwhen i > 11
+            set udg_player_hero[i] = null
+            set udg_player_hero_id[i] = 0
+            set i = i + 1
+        endloop
+
+        set CustomHeroSystemInitialized[0] = true
+    endfunction
+
+    // ==========================================
+    // 原生属性操作接口 (War3直接支持)
+    // ==========================================
+
+    // 获取当前生命值
+    function CustomHeroAttr_GetHealth takes unit hero returns real
+        return GetUnitState(hero, UNIT_STATE_LIFE)
+    endfunction
+
+    // 设置当前生命值
+    function CustomHeroAttr_SetHealth takes unit hero, real value returns nothing
+        call SetUnitState(hero, UNIT_STATE_LIFE, value)
+    endfunction
+
+    // 获取当前魔法值
+    function CustomHeroAttr_GetMana takes unit hero returns real
+        return GetUnitState(hero, UNIT_STATE_MANA)
+    endfunction
+
+    // 设置当前魔法值
+    function CustomHeroAttr_SetMana takes unit hero, real value returns nothing
+        call SetUnitState(hero, UNIT_STATE_MANA, value)
+    endfunction
+
+    // 获取最大生命值
+    function CustomHeroAttr_GetMaxHealth takes unit hero returns real
+        return GetUnitState(hero, UNIT_STATE_MAX_LIFE)
+    endfunction
+
+    // 设置最大生命值（需要YDWE万能属性系统或类似系统支持）
+    function CustomHeroAttr_SetMaxHealth takes unit hero, real value returns nothing
+        // 注意：这里需要根据您的实际情况实现
+        // 如果使用YDWE，可以调用：call YDWESetUnitMaxLife(hero, value)
+        // 如果使用其他系统，请修改此函数
+        call SetUnitState(hero, UNIT_STATE_MAX_LIFE, value)
+    endfunction
+
+    // 获取最大魔法值
+    function CustomHeroAttr_GetMaxMana takes unit hero returns real
+        return GetUnitState(hero, UNIT_STATE_MAX_MANA)
+    endfunction
+
+    // 设置最大魔法值（需要YDWE万能属性系统或类似系统支持）
+    function CustomHeroAttr_SetMaxMana takes unit hero, real value returns nothing
+        // 注意：这里需要根据您的实际情况实现
+        // 如果使用YDWE，可以调用：call YDWESetUnitMaxMana(hero, value)
+        // 如果使用其他系统，请修改此函数
+        call SetUnitState(hero, UNIT_STATE_MAX_MANA, value)
+    endfunction
+
+    // 获取力量（根骨）
+    function CustomHeroAttr_GetStrength takes unit hero returns integer
+        return GetHeroStr(hero, false)
+    endfunction
+
+    // 设置力量（根骨）
+    function CustomHeroAttr_SetStrength takes unit hero, integer value returns nothing
+        call SetHeroStr(hero, value, true)
+    endfunction
+
+    // 增加力量（根骨）
+    function CustomHeroAttr_AddStrength takes unit hero, integer delta returns nothing
+        local integer current = CustomHeroAttr_GetStrength(hero)
+        call CustomHeroAttr_SetStrength(hero, current + delta)
+    endfunction
+
+    // 获取智力（悟性）
+    function CustomHeroAttr_GetIntelligence takes unit hero returns integer
+        return GetHeroInt(hero, false)
+    endfunction
+
+    // 设置智力（悟性）
+    function CustomHeroAttr_SetIntelligence takes unit hero, integer value returns nothing
+        call SetHeroInt(hero, value, true)
+    endfunction
+
+    // 增加智力（悟性）
+    function CustomHeroAttr_AddIntelligence takes unit hero, integer delta returns nothing
+        local integer current = CustomHeroAttr_GetIntelligence(hero)
+        call CustomHeroAttr_SetIntelligence(hero, current + delta)
+    endfunction
+
+    // 获取敏捷（身法）
+    function CustomHeroAttr_GetAgility takes unit hero returns integer
+        return GetHeroAgi(hero, false)
+    endfunction
+
+    // 设置敏捷（身法）
+    function CustomHeroAttr_SetAgility takes unit hero, integer value returns nothing
+        call SetHeroAgi(hero, value, true)
+    endfunction
+
+    // 增加敏捷（身法）
+    function CustomHeroAttr_AddAgility takes unit hero, integer delta returns nothing
+        local integer current = CustomHeroAttr_GetAgility(hero)
+        call CustomHeroAttr_SetAgility(hero, current + delta)
+    endfunction
+
+    // ==========================================
+    // 自定义属性操作接口 (使用哈希表存储)
+    // ==========================================
+
+    // 获取自定义属性值
+    function CustomHeroAttr_GetCustom takes unit hero, integer attr_id returns real
+        return LoadReal(udg_custom_hero_attribute_ht, GetHandleId(hero), attr_id)
+    endfunction
+
+    // 设置自定义属性值
+    function CustomHeroAttr_SetCustom takes unit hero, integer attr_id, real value returns nothing
+        call SaveReal(udg_custom_hero_attribute_ht, GetHandleId(hero), attr_id, value)
+    endfunction
+
+    // 增加自定义属性值
+    function CustomHeroAttr_AddCustom takes unit hero, integer attr_id, real delta returns nothing
+        local real current = CustomHeroAttr_GetCustom(hero, attr_id)
+        call CustomHeroAttr_SetCustom(hero, attr_id, current + delta)
+    endfunction
+
+    // ==========================================
+    // 通用属性操作接口 (自动判断属性类型)
+    // ==========================================
+
+    // 获取属性值（通用接口，自动判断是原生属性还是自定义属性）
+    function CustomHeroAttr_Get takes unit hero, integer attr_id returns real
+        local integer hero_key = GetHandleId(hero)
+
+        // 判断是否为原生属性
+        if attr_id == ATTR_HEALTH then
+            return CustomHeroAttr_GetHealth(hero)
+        elseif attr_id == ATTR_MANA then
+            return CustomHeroAttr_GetMana(hero)
+        elseif attr_id == ATTR_STR then
+            return I2R(CustomHeroAttr_GetStrength(hero))
+        elseif attr_id == ATTR_INT then
+            return I2R(CustomHeroAttr_GetIntelligence(hero))
+        elseif attr_id == ATTR_AGI then
+            return I2R(CustomHeroAttr_GetAgility(hero))
+        elseif attr_id == ATTR_MAX_HEALTH then
+            return CustomHeroAttr_GetMaxHealth(hero)
+        elseif attr_id == ATTR_MAX_MANA then
+            return CustomHeroAttr_GetMaxMana(hero)
+        else
+            // 自定义属性
+            return CustomHeroAttr_GetCustom(hero, attr_id)
+        endif
+    endfunction
+
+    // 设置属性值（通用接口，自动判断属性类型）
+    function CustomHeroAttr_Set takes unit hero, integer attr_id, real value returns nothing
+        local integer hero_key = GetHandleId(hero)
+
+        // 判断是否为原生属性
+        if attr_id == ATTR_HEALTH then
+            call CustomHeroAttr_SetHealth(hero, value)
+        elseif attr_id == ATTR_MANA then
+            call CustomHeroAttr_SetMana(hero, value)
+        elseif attr_id == ATTR_STR then
+            call CustomHeroAttr_SetStrength(hero, R2I(value))
+        elseif attr_id == ATTR_INT then
+            call CustomHeroAttr_SetIntelligence(hero, R2I(value))
+        elseif attr_id == ATTR_AGI then
+            call CustomHeroAttr_SetAgility(hero, R2I(value))
+        elseif attr_id == ATTR_MAX_HEALTH then
+            call CustomHeroAttr_SetMaxHealth(hero, value)
+        elseif attr_id == ATTR_MAX_MANA then
+            call CustomHeroAttr_SetMaxMana(hero, value)
+        else
+            // 自定义属性
+            call CustomHeroAttr_SetCustom(hero, attr_id, value)
+        endif
+    endfunction
+
+    // 增加属性值（通用接口）
+    function CustomHeroAttr_Add takes unit hero, integer attr_id, real delta returns nothing
+        local real current = CustomHeroAttr_Get(hero, attr_id)
+        call CustomHeroAttr_Set(hero, attr_id, current + delta)
+    endfunction
+
+    // ==========================================
+    // 属性上限检查函数（可选）
+    // ==========================================
+
+    // 检查并限制属性值在合理范围内
+    function CustomHeroAttr_Clamp takes unit hero, integer attr_id returns nothing
+        local real value = CustomHeroAttr_Get(hero, attr_id)
+        local real clampedValue = value
+
+        // 根据属性类型应用上限
+        // {{CLAMP_FUNCTION_CASES_START}}
+        if attr_id == ATTR_CRIT_RATE then
+            set clampedValue = RMinBJ(value, MAX_CRIT_RATE)
+        elseif attr_id == ATTR_CRIT_DAMAGE then
+            set clampedValue = RMinBJ(value, MAX_CRIT_DAMAGE)
+        elseif attr_id == ATTR_DODGE then
+            set clampedValue = RMinBJ(value, MAX_DODGE_RATE)
+        elseif attr_id == ATTR_LIFESTEAL then
+            set clampedValue = RMinBJ(value, MAX_LIFESTEAL)
+        elseif attr_id == ATTR_COOLDOWN then
+            set clampedValue = RMinBJ(value, MAX_COOLDOWN_REDUCTION)
+        endif
+        // {{CLAMP_FUNCTION_CASES_END}}
+
+        // 如果值被限制，则更新
+        if clampedValue != value then
+            call CustomHeroAttr_Set(hero, attr_id, clampedValue)
+        endif
+    endfunction
+
+    // 批量检查所有属性的上限
+    function CustomHeroAttr_ClampAll takes unit hero returns nothing
+        // 检查所有配置了上限的属性
+        call CustomHeroAttr_Clamp(hero, ATTR_CRIT_RATE)
+        call CustomHeroAttr_Clamp(hero, ATTR_CRIT_DAMAGE)
+        call CustomHeroAttr_Clamp(hero, ATTR_DODGE)
+        call CustomHeroAttr_Clamp(hero, ATTR_LIFESTEAL)
+        call CustomHeroAttr_Clamp(hero, ATTR_COOLDOWN)
+
+        // 您可以在这里添加其他需要检查的属性
+    endfunction
+
+    // ==========================================
+    // 便捷函数（根据您的自定义属性配置）
+    // ==========================================
+
+    // {{CONVENIENCE_FUNCTIONS_START}}
+    // 获取武力（攻击力）
+    function CustomHeroAttr_GetAttack takes unit hero returns real
+        return CustomHeroAttr_Get(hero, ATTR_ATTACK)
+    endfunction
+
+    // 设置武力（攻击力）
+    function CustomHeroAttr_SetAttack takes unit hero, real value returns nothing
+        call CustomHeroAttr_Set(hero, ATTR_ATTACK, value)
+    endfunction
+
+    // 获取法强（法术强度）
+    function CustomHeroAttr_GetSpellPower takes unit hero returns real
+        return CustomHeroAttr_Get(hero, ATTR_SPELL_POWER)
+    endfunction
+
+    // 设置法强（法术强度）
+    function CustomHeroAttr_SetSpellPower takes unit hero, real value returns nothing
+        call CustomHeroAttr_Set(hero, ATTR_SPELL_POWER, value)
+    endfunction
+
+    // 获取会心（暴击率）
+    function CustomHeroAttr_GetCritRate takes unit hero returns real
+        return CustomHeroAttr_Get(hero, ATTR_CRIT_RATE)
+    endfunction
+
+    // 设置会心（暴击率）
+    function CustomHeroAttr_SetCritRate takes unit hero, real value returns nothing
+        call CustomHeroAttr_Set(hero, ATTR_CRIT_RATE, value)
+        call CustomHeroAttr_Clamp(hero, ATTR_CRIT_RATE)
+    endfunction
+
+    // 获取要害（暴击伤害）
+    function CustomHeroAttr_GetCritDamage takes unit hero returns real
+        return CustomHeroAttr_Get(hero, ATTR_CRIT_DAMAGE)
+    endfunction
+
+    // 设置要害（暴击伤害）
+    function CustomHeroAttr_SetCritDamage takes unit hero, real value returns nothing
+        call CustomHeroAttr_Set(hero, ATTR_CRIT_DAMAGE, value)
+        call CustomHeroAttr_Clamp(hero, ATTR_CRIT_DAMAGE)
+    endfunction
+
+    // 获取护体（护甲）
+    function CustomHeroAttr_GetArmor takes unit hero returns real
+        return CustomHeroAttr_Get(hero, ATTR_ARMOR)
+    endfunction
+
+    // 设置护体（护甲）
+    function CustomHeroAttr_SetArmor takes unit hero, real value returns nothing
+        call CustomHeroAttr_Set(hero, ATTR_ARMOR, value)
+    endfunction
+
+    // 获取抗性（魔法抗性）
+    function CustomHeroAttr_GetResistance takes unit hero returns real
+        return CustomHeroAttr_Get(hero, ATTR_RESISTANCE)
+    endfunction
+
+    // 设置抗性（魔法抗性）
+    function CustomHeroAttr_SetResistance takes unit hero, real value returns nothing
+        call CustomHeroAttr_Set(hero, ATTR_RESISTANCE, value)
+    endfunction
+
+    // 获取闪避（闪避率）
+    function CustomHeroAttr_GetDodge takes unit hero returns real
+        return CustomHeroAttr_Get(hero, ATTR_DODGE)
+    endfunction
+
+    // 设置闪避（闪避率）
+    function CustomHeroAttr_SetDodge takes unit hero, real value returns nothing
+        call CustomHeroAttr_Set(hero, ATTR_DODGE, value)
+        call CustomHeroAttr_Clamp(hero, ATTR_DODGE)
+    endfunction
+
+    // 获取吸血（吸血率）
+    function CustomHeroAttr_GetLifesteal takes unit hero returns real
+        return CustomHeroAttr_Get(hero, ATTR_LIFESTEAL)
+    endfunction
+
+    // 设置吸血（吸血率）
+    function CustomHeroAttr_SetLifesteal takes unit hero, real value returns nothing
+        call CustomHeroAttr_Set(hero, ATTR_LIFESTEAL, value)
+        call CustomHeroAttr_Clamp(hero, ATTR_LIFESTEAL)
+    endfunction
+    // {{CONVENIENCE_FUNCTIONS_END}}
+
+    // ==========================================
+    // 英雄初始化函数
+    // ==========================================
+
+    // 初始化英雄属性（设置默认值）
+    function CustomHero_InitAttributes takes unit hero returns nothing
+        local integer player_id
+
+        if hero == null then
+            return
+        endif
+
+        set player_id = GetPlayerId(GetOwningPlayer(hero))
+
+        // 保存英雄引用
+        set udg_player_hero[player_id] = hero
+
+        // 初始化原生属性（默认值）
+        call CustomHeroAttr_SetMaxHealth(hero, 500.0)
+        call CustomHeroAttr_SetHealth(hero, 500.0)
+        call CustomHeroAttr_SetMaxMana(hero, 300.0)
+        call CustomHeroAttr_SetMana(hero, 300.0)
+        call CustomHeroAttr_SetStrength(hero, 10)
+        call CustomHeroAttr_SetIntelligence(hero, 10)
+        call CustomHeroAttr_SetAgility(hero, 10)
+
+        // 初始化自定义属性（默认值）
+        // 注意：这里根据您的配置设置默认值
+        // {{DEFAULT_VALUES_START}}
+        call CustomHeroAttr_Set(hero, ATTR_ATTACK, 20.0)
+        call CustomHeroAttr_Set(hero, ATTR_SPELL_POWER, 20.0)
+        call CustomHeroAttr_Set(hero, ATTR_CRIT_RATE, 5.0)
+        call CustomHeroAttr_Set(hero, ATTR_CRIT_DAMAGE, 150.0)
+        call CustomHeroAttr_Set(hero, ATTR_ARMOR, 0.0)
+        call CustomHeroAttr_Set(hero, ATTR_RESISTANCE, 0.0)
+        call CustomHeroAttr_Set(hero, ATTR_DODGE, 0.0)
+        call CustomHeroAttr_Set(hero, ATTR_LIFESTEAL, 0.0)
+        call CustomHeroAttr_Set(hero, ATTR_COOLDOWN, 0.0)
+        call CustomHeroAttr_Set(hero, ATTR_MOVE_SPEED, 0.0)
+        // {{DEFAULT_VALUES_END}}
+
+        // 检查属性上限
+        call CustomHeroAttr_ClampAll(hero)
+    endfunction
+
+    // ==========================================
+    // 使用示例和说明
+    // ==========================================
+
+    // 示例：如何在不同场景中使用本系统
+    //
+    // 1. 在触发器初始化时调用初始化函数：
+    //    call InitCustomHeroAttributeSystem()
+    //
+    // 2. 创建英雄时初始化属性：
+    //    call CustomHero_InitAttributes(heroUnit)
+    //
+    // 3. 获取和设置属性：
+    //    local real currentHealth = CustomHeroAttr_GetHealth(hero)
+    //    call CustomHeroAttr_SetHealth(hero, currentHealth + 100.0)
+    //
+    // 4. 使用通用接口：
+    //    local real attackValue = CustomHeroAttr_Get(hero, ATTR_ATTACK)
+    //    call CustomHeroAttr_Add(hero, ATTR_ATTACK, 10.0)
+    //
+    // 5. 使用便捷函数：
+    //    local real critRate = CustomHeroAttr_GetCritRate(hero)
+    //    call CustomHeroAttr_SetCritRate(hero, critRate + 5.0)
+
+endlibrary

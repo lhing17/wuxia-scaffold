@@ -1,3 +1,41 @@
 scaffold*.w3x
 
 .git/
+
+# Python编译文件和缓存
+*.py[cod]
+*$py.class
+__pycache__/
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 备份文件
+*.backup*
+*.bak
+*~
+*.swp
+*.swo
+
+# 项目特定的备份目录
+scripts/python/backups/*
+
+# 生成的JASS文件
+scripts/jass/core/01_custom_hero_attribute_system.j
+
+# Claude Code缓存目录
+.claude/
