@@ -332,11 +332,13 @@ library CustomHeroAttributeSystem initializer InitCustomHeroAttributeSystem
     // 批量检查所有属性的上限
     function CustomHeroAttr_ClampAll takes unit hero returns nothing
         // 检查所有配置了上限的属性
+        // {{CLAMP_ALL_CALLS_START}}
         call CustomHeroAttr_Clamp(hero, ATTR_CRIT_RATE)
         call CustomHeroAttr_Clamp(hero, ATTR_CRIT_DAMAGE)
         call CustomHeroAttr_Clamp(hero, ATTR_DODGE)
         call CustomHeroAttr_Clamp(hero, ATTR_LIFESTEAL)
         call CustomHeroAttr_Clamp(hero, ATTR_COOLDOWN)
+        // {{CLAMP_ALL_CALLS_END}}
 
         // 您可以在这里添加其他需要检查的属性
     endfunction

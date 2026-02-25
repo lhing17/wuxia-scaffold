@@ -71,6 +71,8 @@ TEMPLATE_MARKERS = {
     "ATTRIBUTE_LIMITS_END": "// {{ATTRIBUTE_LIMITS_END}}",
     "CLAMP_FUNCTION_CASES_START": "// {{CLAMP_FUNCTION_CASES_START}}",
     "CLAMP_FUNCTION_CASES_END": "// {{CLAMP_FUNCTION_CASES_END}}",
+    "CLAMP_ALL_CALLS_START": "// {{CLAMP_ALL_CALLS_START}}",
+    "CLAMP_ALL_CALLS_END": "// {{CLAMP_ALL_CALLS_END}}",
     "CONVENIENCE_FUNCTIONS_START": "// {{CONVENIENCE_FUNCTIONS_START}}",
     "CONVENIENCE_FUNCTIONS_END": "// {{CONVENIENCE_FUNCTIONS_END}}",
     "DEFAULT_VALUES_START": "// {{DEFAULT_VALUES_START}}",
@@ -536,6 +538,7 @@ class JASSGenerator:
         content = self._replace_custom_attributes(content, config.custom_attributes, config.custom_start_id)
         content = self._replace_attribute_limits(content, config.attribute_limits)
         content = self._replace_clamp_function(content, config.attribute_limits)
+        content = self._replace_clamp_all_calls(content, config.attribute_limits)
         content = self._replace_convenience_functions(content, config.custom_attributes, config.attribute_limits)
         content = self._replace_default_values(content, config.default_values)
 
@@ -609,14 +612,40 @@ class JASSGenerator:
 
         # 生成clamp函数case代码
         clamp_cases = []
-        for limit in limits:
+        for i, limit in enumerate(limits):
             # 提取属性名（去掉ATTR_前缀）
             attr_name = limit.attribute_name.replace("ATTR_", "")
-            case = f"        if attr_id == {limit.attribute_name} then\n            set clampedValue = RMinBJ(value, MAX_{attr_name})"
+
+            if i == 0:
+                # 第一个使用if
+                case = f"        if attr_id == {limit.attribute_name} then\n            set clampedValue = RMinBJ(value, MAX_{attr_name})"
+            else:
+                # 后续使用elseif
+                case = f"        elseif attr_id == {limit.attribute_name} then\n            set clampedValue = RMinBJ(value, MAX_{attr_name})"
             clamp_cases.append(case)
 
+        # 如果没有上限配置，生成空的内容
+        if not clamp_cases:
+            clamp_code = ""
+        else:
+            clamp_code = "\n".join(clamp_cases) + "\n        endif"
+
         # 替换标记之间的内容
-        return self._replace_between_markers(content, start_marker, end_marker, "\n".join(clamp_cases))
+        return self._replace_between_markers(content, start_marker, end_marker, clamp_code)
+
+    def _replace_clamp_all_calls(self, content: str, limits: List[AttributeLimit]) -> str:
+        """生成ClampAll函数的调用列表"""
+        start_marker = TEMPLATE_MARKERS["CLAMP_ALL_CALLS_START"]
+        end_marker = TEMPLATE_MARKERS["CLAMP_ALL_CALLS_END"]
+
+        # 生成调用代码
+        calls = []
+        for limit in limits:
+            call = f"        call CustomHeroAttr_Clamp(hero, {limit.attribute_name})"
+            calls.append(call)
+
+        # 替换标记之间的内容
+        return self._replace_between_markers(content, start_marker, end_marker, "\n".join(calls))
 
     def _replace_convenience_functions(self, content: str, attributes: List[CustomAttribute], attribute_limits: List[AttributeLimit]) -> str:
         """生成便捷函数"""
@@ -663,7 +692,7 @@ class JASSGenerator:
         return self._replace_between_markers(content, start_marker, end_marker, "\n".join(default_code))
 
     def _replace_between_markers(self, content: str, start_marker: str, end_marker: str, new_content: str) -> str:
-        """替换两个标记之间的内容"""
+        """替换两个标记之间的内容（包括标记本身）"""
         start_idx = content.find(start_marker)
         end_idx = content.find(end_marker)
 
@@ -674,11 +703,11 @@ class JASSGenerator:
         # 计算结束标记后的位置
         end_idx += len(end_marker)
 
-        # 构建新内容
-        before = content[:start_idx + len(start_marker)]
+        # 构建新内容：替换标记及其之间的所有内容
+        before = content[:start_idx]
         after = content[end_idx:]
 
-        return before + "\n" + new_content + "\n" + after
+        return before + new_content + after
 
 
 # ============================================================================
